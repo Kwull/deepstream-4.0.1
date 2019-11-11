@@ -1,0 +1,68 @@
+################################################################################
+# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+#
+# NVIDIA Corporation and its licensors retain all intellectual property
+# and proprietary rights in and to this software, related documentation
+# and any modifications thereto.  Any use, reproduction, disclosure or
+# distribution of this software and related documentation without an express
+# license agreement from NVIDIA Corporation is strictly prohibited.
+#
+################################################################################
+ 
+This project implements protocol adaptor for kafka.
+The adaptor implements and exposed the DSMI API for client applications to interface with it.
+
+Dependencies
+-------------
+Build dependencies with installation instructions:
+* librdkafka
+
+  git clone https://github.com/edenhill/librdkafka.git
+  cd librdkafka
+  git reset --hard 7101c2310341ab3f4675fc565f64f0967e135a6a
+  ./configure
+  make
+  sudo make install
+  sudo cp /usr/local/lib/librdkafka* /opt/nvidia/deepstream/deepstream-<version>/lib/
+
+* glib 2.0
+
+  apt-get install libglib2.0 libglib2.0-dev
+
+* jansson
+
+  apt-get install  libjansson4  libjansson-dev
+
+Building the adaptor
+---------------------
+Upon installaing the dependencies, to build adaptor execute 'make'.
+
+Refer to test program for illustration of using the adaptor.
+
+Sample programs
+------------------
+To build test program execute 'make -f Makefile.test'
+
+Make sure to modify the address for the kafka broker being connected to as part of the call to msgapi_connect_ptr:
+
+ conn_handle = msgapi_connect_ptr((char *)"yourserver.yourdomain.net;9092;yourtopic",(nvds_msgapi_connect_cb_t) sample_msgapi_connect_cb, (char *)CFG_FILE);
+
+Before running the sample applications, enable logs by running the logger setup script:
+For x86,
+ chmod u+x ~/deepstream_x86_public/sources/tools/nvds_logger/setup_nvds_logger.sh
+ sudo ~/deepstream_x86_public/sources/tools/nvds_logger/setup_nvds_logger.sh
+On Jetson,
+ chmod u+x ~/deepstream_sdk_on_jetson/sources/tools/nvds_logger/setup_nvds_logger.sh
+ sudo ~/deepstream_sdk_on_jetson/sources/tools/nvds_logger/setup_nvds_logger.sh
+
+Note that for complete set of logs, set the logger level to 7 (DEBUG), as described in the logger README.
+
+To run test program:
+  ./test_sample_proto_sync
+  ./test_sample_proto_async
+
+Note that the send operation inspects the incoming JSON formatted message to look for a sensor.id field.
+This field (if present) is used as message key while sending to kafka broker.
+If the key is not present then the default partitioner is used.
+
+Refer to the user guide for adaptor usage information including adaptor API, and configuration options.
