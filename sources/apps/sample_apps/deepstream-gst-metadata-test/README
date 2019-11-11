@@ -1,0 +1,61 @@
+*****************************************************************************
+* Copyright (c) 2019 NVIDIA Corporation.  All rights reserved.
+*
+* NVIDIA Corporation and its licensors retain all intellectual property
+* and proprietary rights in and to this software, related documentation
+* and any modifications thereto.  Any use, reproduction, disclosure or
+* distribution of this software and related documentation without an express
+* license agreement from NVIDIA Corporation is strictly prohibited.
+*****************************************************************************
+
+Prequisites:
+
+Please follow instructions in the apps/sample_apps/deepstream-app/README on how
+to install the prequisites for Deepstream SDK, the DeepStream SDK itself and the
+apps.
+
+Compilation Steps:
+  $ cd apps/deepstream-gst-metadata-test/
+  $ make
+  $ ./deepstream-gst-metadata-test <h264_elementary_stream>
+
+This document shall describe about the sample deepstream-gst-metadata-test application.
+
+It is meant for simple demonstration of how to set metadata before nvstreammux
+component, how to access it after nvstreammux component for DeepStream SDK
+elements in the pipeline and extract meaningful insights from a video stream.
+
+This sample creates instance of "nvinfer" element. Instance of
+the "nvinfer" uses TensorRT API to execute inferencing on a model. Using a
+correct configuration for a nvinfer element instance is therefore very
+important as considerable behaviors of the instance are parameterized
+through these configs.
+
+For reference, here are the config files used for this sample :
+1. The 4-class detector (referred to as pgie in this sample) uses
+    dstest1_pgie_config.txt
+
+In this sample, we create one instance of "nvinfer", referred as the pgie.
+This is our 4 class detector and it detects for "Vehicle , RoadSign, TwoWheeler,
+Person".
+
+In this sample, we also create one instance of "nvv4l2decoder".
+nvv4l2decoder element is present before nvstreammux element in the pipeline.
+nvdecoder_src_pad_buffer_probe() will attach dummy decoder metadata to gstreamer
+buffer on src pad. The decoder can not attach its metadata to NvDsBatchMeta
+metadata because batch level metadata is created by nvstreammux component.
+So it attaches the metadata using gstnvdsmeta API's. Refer to
+"nvdecoder_src_pad_buffer_probe" function in the source code.
+
+nvstreammux component, upon receiving the gst buffer at its sinkpad, transforms
+the gst meta attached by decoder into nvds user metadata at frame level.
+This way we maintain the association of frame metadata attached before
+and after nvstreammux element.
+
+In the example, nvinfer_src_pad_buffer_probe() extracts the metadata
+received on nvinfer src pad. It explains the mechanism to access transformed
+decoder metadata.
+
+Expected output:
+gst Metadata attached on nvv4l2decoder source pad probe function should match with
+transformed nvds user metadata at frame level received on nvinfer src pad.

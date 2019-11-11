@@ -1,0 +1,74 @@
+################################################################################
+# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+#
+# NVIDIA Corporation and its licensors retain all intellectual property
+# and proprietary rights in and to this software, related documentation
+# and any modifications thereto.  Any use, reproduction, disclosure or
+# distribution of this software and related documentation without an express
+# license agreement from NVIDIA Corporation is strictly prohibited.
+#
+################################################################################
+
+This sample shows how to integrate a detector Model like FasterRCNN having layers
+supported through IPlugin interface by TensorRT and with custom output layer
+parsing for detected objects with DeepStreamSDK. The sample uses the
+IPluginFactory/IPluginFactoryV2 interface for configuring the fused RPN+ROI
+plugin provided by TensorRT. This sample also demonstrates how to initialize
+input layers when the network hase more than the one video frame input layer.
+This sample has been derived from TensorRT's sampleFasterRCNN.
+
+--------------------------------------------------------------------------------
+Sample contents:
+- deepstream_app_config_fasterRCNN.txt - DeepStream reference app configuration
+  file for using FasterRCNN model as the primary detector.
+- config_infer_primary_fasterRCNN.txt - Configuration file for the GStreamer
+  nvinfer plugin for the FasterRCNN model.
+- nvdsinfer_custom_impl_fasterRCNN/nvdsiplugin_fasterRCNN.cpp -
+  IPluginFactory/IPluginFactoryV2 implementation for the fused "RPN+ROI" layer
+  in the FasterRCNN model. This implementation has been referred to from the
+  TensorRT sample sampleFasterRCNN. To switch between the IPluginFactory and
+  IPluginFactoryV2 interfaces, toggle the USE_LEGACY_IPLUGIN_FACTORY flag in
+  nvdsiplugin_fasterRCNN.cpp.
+- nvdsinfer_custom_impl_fasterRCNN/nvdsparsebbox_fasterRCNN.cpp - Output layer
+  parsing function for detected objects for the FasterRCNN model.
+- nvdsinfer_custom_impl_fasterRCNN/nvdsinitinputlayers_fasterRCNN.cpp -
+  Implementation of NvDsInferInitializeInputLayers to initialize "im_info"
+  input layer.
+- factoryFasterRCNN.h - IPluginV2+IPluginFactoryV2 implementation
+- factoryFasterRCNNLegacy.h - Legacy IPlugin+IPluginFactory implementation
+
+--------------------------------------------------------------------------------
+Pre-requisites:
+- Download model tar file using:
+  $ wget --no-check-certificate \
+        https://dl.dropboxusercontent.com/s/o6ii098bu51d139/faster_rcnn_models.tgz?dl=0 \
+        -O faster-rcnn.tgz
+- Untar the model using:
+  $ tar zxvf faster-rcnn.tgz -C . --strip-components=1 --exclude=ZF_*
+- Copy the prototxt file "faster_rcnn_test_iplugin.prototxt" from the
+  data/faster-rcnn directory in TensorRT samples to this directory.
+
+--------------------------------------------------------------------------------
+Compile the custom library:
+  $ make -C nvdsinfer_custom_impl_fasterRCNN
+
+--------------------------------------------------------------------------------
+Run the sample:
+The "nvinfer" config file config_infer_primary_fasterRCNN.txt specifies the path to
+the custom library and the custom output parsing function through the properties
+"custom-lib-path" and "parse-bbox-func-name" respectively.
+
+- With gst-launch-1.0
+  For Jetson:
+  $ gst-launch-1.0 filesrc location=../../samples/streams/sample_1080p_h264.mp4 ! \
+        decodebin ! m.sink_0 nvstreammux name=m batch-size=1 width=1280 \
+        height=720 ! nvinfer config-file-path= config_infer_primary_fasterRCNN.txt ! \
+        nvvideoconvert ! nvdsosd ! nvegltransform ! nveglglessink
+  For dGPU:
+  $ gst-launch-1.0 filesrc location=../../samples/streams/sample_1080p_h264.mp4 ! \
+        decodebin ! m.sink_0 nvstreammux name=m batch-size=1 width=1280 \
+        height=720 ! nvinfer config-file-path= config_infer_primary_fasterRCNN.txt ! \
+        nvvideoconvert ! nvdsosd ! nveglglessink
+
+- With deepstream-app
+  $ deepstream-app -c deepstream_app_config_fasterRCNN.txt

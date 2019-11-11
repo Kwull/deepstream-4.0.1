@@ -1,0 +1,26 @@
+*****************************************************************************
+* Copyright (c) 2019 NVIDIA Corporation.  All rights reserved.
+*
+* NVIDIA Corporation and its licensors retain all intellectual property
+* and proprietary rights in and to this software, related documentation
+* and any modifications thereto.  Any use, reproduction, disclosure or
+* distribution of this software and related documentation without an express
+* license agreement from NVIDIA Corporation is strictly prohibited.
+*****************************************************************************
+
+This demo shows the performance of deepstream, like flowers classification
+by TensorRT inference server in GTC show and the difference is that images input
+is changed to video input. Please check the below link:
+
+https://www.youtube.com/watch?v=8bbtAvMAI2c
+
+Pipeline:
+filesrc (switch)-> h264parser -> nvv4l2decoder -> nvstreammux -> pgie -> sgie1
+-> sgie2-> sgie3 -> nvvideoconvert -> nvdsosd -> (nvtransform) ->nveglglessink
+
+
+Usage:
+- Prepare a folder and put all h264 files in it
+- $ make
+- $ deepstream-perf-demo <rows num> <columns num> <streams dir>
+    Note: It's better rows == columns

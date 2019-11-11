@@ -1,0 +1,35 @@
+*****************************************************************************
+* Copyright (c) 2019 NVIDIA Corporation.  All rights reserved.
+*
+* NVIDIA Corporation and its licensors retain all intellectual property
+* and proprietary rights in and to this software, related documentation
+* and any modifications thereto.  Any use, reproduction, disclosure or
+* distribution of this software and related documentation without an express
+* license agreement from NVIDIA Corporation is strictly prohibited.
+*****************************************************************************
+
+Prequisites:
+
+Please follow instructions in the apps/sample_apps/deepstream-app/README on how
+to install the prequisites for Deepstream SDK, the DeepStream SDK itself and the
+apps.
+
+Pipeline:
+filesrc -> jpegparse -> nvv4l2decoder -> nvstreammux -> nvinfer (segmentation)
+nvsegvidsual -> nvmultistreamtiler -> (nvegltransform) -> nveglglessink
+
+Compilation Steps:
+  $ cd apps/deepstream-segmentation-test/
+  $ make
+  $ ./deepstream-segmentation-app <config_file> <file1> [file2] ... [fileN]
+
+E.g. for semantic segmentation, it needs semantic model which can get 4 classes map,
+including backgroud, car, person, bicycle.
+"nvsegvidsual" plugin chooses 4 different colors for them and to display.
+  $ ./deepstream-segmentation-app dstest_segmentation_config_semantic.txt sample_720p.mjpeg sample_720p.mjpeg
+
+E.g. for industrial segmentation, it needs industrial model which can only get defective
+area map.
+  $ ./deepstream-segmentation-app dstest_segmentation_config_industrial.txt sample_industrial.jpg
+
+Don't forget to change batch-size to match the number of input files.
