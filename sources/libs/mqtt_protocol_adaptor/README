@@ -1,37 +1,21 @@
-################################################################################
-# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
-#
-# NVIDIA Corporation and its licensors retain all intellectual property
-# and proprietary rights in and to this software, related documentation
-# and any modifications thereto.  Any use, reproduction, disclosure or
-# distribution of this software and related documentation without an express
-# license agreement from NVIDIA Corporation is strictly prohibited.
-#
-################################################################################
- 
-This project implements protocol adaptor for kafka.
+This project implements protocol adaptor for mqtt.
 The adaptor implements and exposed the DSMI API for client applications to interface with it.
 
 Dependencies
 -------------
 Build dependencies with installation instructions:
-* librdkafka
+* libssl-dev
 
-  git clone https://github.com/edenhill/librdkafka.git
-  cd librdkafka
-  git reset --hard 7101c2310341ab3f4675fc565f64f0967e135a6a
-  ./configure
+ sudo apt-get install -y libssl-dev
+
+* libpaho-mqtt
+
+  git clone https://github.com/eclipse/paho.mqtt.c.git
+  cd paho.mqtt.c
   make
   sudo make install
-  sudo cp /usr/local/lib/librdkafka* /opt/nvidia/deepstream/deepstream-<version>/lib/
-
-* glib 2.0
-
-  apt-get install libglib2.0 libglib2.0-dev
-
-* jansson
-
-  apt-get install  libjansson4  libjansson-dev
+  sudo cp /usr/local/lib/libpaho-mqtt* /opt/nvidia/deepstream/deepstream-<version>/lib/ 
+  sudo ldconfig
 
 Building the adaptor
 ---------------------

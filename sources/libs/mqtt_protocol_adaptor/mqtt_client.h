@@ -46,4 +46,4 @@ NvDsMsgApiErrorType nvds_kafka_client_setconf(void *kh, char *key, char *val);
 void nvds_kafka_client_poll(void *kv);
 void nvds_kafka_client_finish(void *kv);
 
-#define NVDS_KAFKA_LOG_CAT "NVDS_KAFKA_PROTO"
+#define NVDS_MQTT_LOG_CAT "NVDS_MQTT_PROTO"

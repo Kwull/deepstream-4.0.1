@@ -1,13 +1,3 @@
-/*
- * Copyright (c) 2018 NVIDIA Corporation.  All rights reserved.
- *
- * NVIDIA Corporation and its licensors retain all intellectual property
- * and proprietary rights in and to this software, related documentation
- * and any modifications thereto.  Any use, reproduction, disclosure or
- * distribution of this software and related documentation without an express
- * license agreement from NVIDIA Corporation is strictly prohibited.
- *
- */
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -24,7 +14,7 @@
 #include <netdb.h>
 #include "nvds_logger.h"
 #include "nvds_msgapi.h"
-#include "kafka_client.h"
+#include "mqtt_client.h"
 
 
 #define MAX_FIELD_LEN 255 //maximum topic length supported by kafka is 255
@@ -54,12 +44,12 @@ typedef struct {
 Eg:
 [message-broker]
 enable=1
-broker-proto-lib=/opt/nvidia/deepstream/deepstream-<version>/lib/libnvds_kafka_proto.so
-broker-conn-str=kafka1.data.nvidiagrid.net;9092;metromind-test-1
+broker-proto-lib=/opt/nvidia/deepstream/deepstream-<version>/lib/libnvds_mqtt_proto.so
+broker-conn-str=tcp://localhost:1883;deepstream-client-id
 rdkafka-cfg="message.timeout.ms=2000"
 
  */
-static void nvds_kafka_read_config(void *kh, char *config_path, char *partition_key_field, int field_len)
+static void nvds_mqtt_read_config(void *kh, char *config_path, char *partition_key_field, int field_len)
 {
   //iterate over the config params to set one by one
   //finally call into launch function passing topic
@@ -71,13 +61,13 @@ static void nvds_kafka_read_config(void *kh, char *config_path, char *partition_
 
   if (!g_key_file_load_from_file (key_file, config_path, G_KEY_FILE_NONE,
             &error)) {
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR,  "unable to load config file at path %s; error message = %s\n", config_path, error->message);
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR,  "unable to load config file at path %s; error message = %s\n", config_path, error->message);
     return;
   }
 
   keys = g_key_file_get_keys(key_file, CONFIG_GROUP_MSG_BROKER, NULL, &error);
   if (error) {
-     nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR,  "Error parsing config file. %s\n", error->message);
+     nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR,  "Error parsing config file. %s\n", error->message);
      return;
   }
   for (key = keys; *key; key++) {
@@ -90,7 +80,7 @@ static void nvds_kafka_read_config(void *kh, char *config_path, char *partition_
                CONFIG_GROUP_MSG_BROKER_RDKAFKA_CFG, &error);
 
 	   if (error) {
-             nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR,  "Error parsing config file\n");
+             nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR,  "Error parsing config file\n");
 	     return;
 	   }
 
@@ -100,13 +90,13 @@ static void nvds_kafka_read_config(void *kh, char *config_path, char *partition_
 	   //remove "". (string length needs to be at least 2)
 	   //Could use g_shell_unquote but it might have other side effects
 	   if ((conflen <3) || (confptr[0] != '"') || (confptr[conflen-1] != '"')) {
-             nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR,  "invalid format for rdkafa \
+             nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR,  "invalid format for rdkafa \
                                config entry. Start and end with \"\"\n");
 	     return;
            }
            confptr[conflen-1] = '\0'; //remove ending quote
            confptr = confptr + 1; //remove starting quote
-	   nvds_log(NVDS_KAFKA_LOG_CAT, LOG_INFO,  "kafka setting %s = %s\n", *key, confptr);
+	   nvds_log(NVDS_MQTT_LOG_CAT, LOG_INFO,  "kafka setting %s = %s\n", *key, confptr);
 	}
 
        // check if this entry specifies the partition key field
@@ -116,18 +106,18 @@ static void nvds_kafka_read_config(void *kh, char *config_path, char *partition_
            key_name_conf = g_key_file_get_string (key_file, CONFIG_GROUP_MSG_BROKER,
                 CONFIG_GROUP_MSG_BROKER_PARTITION_KEY, &error);
            if (error) {
-             nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR,  "Error parsing config file\n");
+             nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR,  "Error parsing config file\n");
              g_error_free(error);
              return;
            }
            strncpy(partition_key_field, (char *)key_name_conf, field_len);
-           nvds_log(NVDS_KAFKA_LOG_CAT, LOG_INFO,  "kafka partition key field name = %s\n", partition_key_field);
+           nvds_log(NVDS_MQTT_LOG_CAT, LOG_INFO,  "kafka partition key field name = %s\n", partition_key_field);
            g_free(key_name_conf);
         }
   }
 
   if (!confptr) {
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_DEBUG,  "No " CONFIG_GROUP_MSG_BROKER_RDKAFKA_CFG " entry found in config file.\n");
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_DEBUG,  "No " CONFIG_GROUP_MSG_BROKER_RDKAFKA_CFG " entry found in config file.\n");
     return;
  }
   
@@ -192,10 +182,10 @@ static int test_kafka_broker_endpoint(char *burl, char *bport) {
 
   //resolve the given url
   if ((error = getaddrinfo(burl, bport, &hints, &res))) {
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "getaddrinfo returned error %d\n", error);
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "getaddrinfo returned error %d\n", error);
 
     if ((error == EAI_FAIL) || (error == EAI_NONAME) ||  (error == EAI_NODATA)){
-      nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "count not resolve addr - permanent failure\n");
+      nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "count not resolve addr - permanent failure\n");
       return error; //permanent failure to resolve
     }
     else 
@@ -268,25 +258,25 @@ NvDsMsgApiHandle nvds_msgapi_connect(char *connection_str,  nvds_msgapi_connect_
   char *portptr, *topicptr;
 
   nvds_log_open();
-  nvds_log(NVDS_KAFKA_LOG_CAT, LOG_INFO, "nvds_msgapi_connect:connection_str = %s\n", connection_str);
+  nvds_log(NVDS_MQTT_LOG_CAT, LOG_INFO, "nvds_msgapi_connect:connection_str = %s\n", connection_str);
 
   portptr = strchr(connection_str, ';');
 
   if (conn_ptr == NULL) { //malloc failed
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "Unable to allocate memory for kafka connection handle.\
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "Unable to allocate memory for kafka connection handle.\
                                                       Can't create connection\n");
     return NULL;
   }
 
   if (portptr == NULL) { //invalid format
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "invalid connection string format. Can't create connection\n");
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "invalid connection string format. Can't create connection\n");
     return NULL;
   }
 
   topicptr = strchr(portptr+1, ';');
 
   if (topicptr == NULL) { //invalid format
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "invalid connection string format. Can't create connection\n");
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "invalid connection string format. Can't create connection\n");
     return NULL;
   }
 
@@ -309,19 +299,19 @@ NvDsMsgApiHandle nvds_msgapi_connect(char *connection_str,  nvds_msgapi_connect_
   memcpy(btopic, (topicptr + 1), topiclen);
   btopic[topiclen] = '\0';
 
-  nvds_log(NVDS_KAFKA_LOG_CAT, LOG_INFO, "kafka broker url = %s; port = %s; topic = %s", burl, bport, btopic);
+  nvds_log(NVDS_MQTT_LOG_CAT, LOG_INFO, "kafka broker url = %s; port = %s; topic = %s", burl, bport, btopic);
 
   snprintf(brokerurl, sizeof(brokerurl), "%s:%s", burl, bport);
 
   if (test_kafka_broker_endpoint(burl, bport)) {
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "Invalid address or network endpoint down. kafka connect failed\n");
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "Invalid address or network endpoint down. kafka connect failed\n");
     free(conn_ptr);
     return NULL;
   }
 
   conn_ptr->kh = nvds_kafka_client_init(brokerurl, btopic);
   if (!conn_ptr->kh) {
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "Unable to init kafka client.\n");
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "Unable to init kafka client.\n");
     free(conn_ptr);
     return NULL;
   }
@@ -331,7 +321,7 @@ NvDsMsgApiHandle nvds_msgapi_connect(char *connection_str,  nvds_msgapi_connect_
   strncpy(conn_ptr->partition_key_field, "sensor.id", sizeof(conn_ptr->partition_key_field));
 
   if (config_path)
-    nvds_kafka_read_config(conn_ptr->kh, config_path, conn_ptr->partition_key_field, \
+    nvds_mqtt_read_config(conn_ptr->kh, config_path, conn_ptr->partition_key_field, \
                         sizeof(conn_ptr->partition_key_field));
 
   nvds_kafka_client_launch(conn_ptr->kh);
@@ -348,12 +338,12 @@ NvDsMsgApiErrorType nvds_msgapi_send(NvDsMsgApiHandle h_ptr, char *topic, const 
   char idval[100];
   int retval;
 
-  nvds_log(NVDS_KAFKA_LOG_CAT, LOG_DEBUG, \
+  nvds_log(NVDS_MQTT_LOG_CAT, LOG_DEBUG, \
     "nvds_msgapi_send: payload=%.*s, \n topic = %s, h->topic = %s\n"\
            , nbuf, payload, topic, (((NvDsKafkaProtoConn *) h_ptr)->topic));
 
   if (strcmp(topic, (((NvDsKafkaProtoConn *) h_ptr)->topic))) {
-     nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "nvds_msgapi_send: send topic has \
+     nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "nvds_msgapi_send: send topic has \
                                              to match topic defined at connect.\n");
      return NVDS_MSGAPI_ERR;
   }
@@ -366,7 +356,7 @@ NvDsMsgApiErrorType nvds_msgapi_send(NvDsMsgApiHandle h_ptr, char *topic, const 
   if (retval)
     return nvds_kafka_client_send(((NvDsKafkaProtoConn *) h_ptr)->kh, payload, nbuf, 1, NULL, NULL, idval, strlen(idval));
   else {
-      nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "nvds_msgapi_send: \
+      nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "nvds_msgapi_send: \
                   no matching json field found based on kafka key config; \
                   using default partition\n");
 
@@ -379,12 +369,12 @@ NvDsMsgApiErrorType nvds_msgapi_send_async(NvDsMsgApiHandle h_ptr, char *topic, 
   char idval[100];
   int retval;
 
-  nvds_log(NVDS_KAFKA_LOG_CAT, LOG_DEBUG, "nvds_msgapi_send_async: payload=%.*s, \
+  nvds_log(NVDS_MQTT_LOG_CAT, LOG_DEBUG, "nvds_msgapi_send_async: payload=%.*s, \
       \n topic = %s, h->topic = %s\n", nbuf, payload, topic, \
        (((NvDsKafkaProtoConn *) h_ptr)->topic));
 
   if (strcmp(topic, (((NvDsKafkaProtoConn *) h_ptr)->topic))) {
-     nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "nvds_msgapi_send_async: \
+     nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "nvds_msgapi_send_async: \
         send topic has to match topic defined at connect.\n");
      return NVDS_MSGAPI_ERR;
   }
@@ -397,7 +387,7 @@ NvDsMsgApiErrorType nvds_msgapi_send_async(NvDsMsgApiHandle h_ptr, char *topic, 
     return nvds_kafka_client_send(((NvDsKafkaProtoConn *) h_ptr)->kh, payload, nbuf, 0, user_ptr, \
              send_callback, idval, strlen(idval));
   else {
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "no matching json field found \
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "no matching json field found \
         based on kafka key config; using default partition\n");
     return nvds_kafka_client_send(((NvDsKafkaProtoConn *) h_ptr)->kh, payload, nbuf, 0, user_ptr, \
                   send_callback, NULL, 0);
@@ -408,14 +398,14 @@ NvDsMsgApiErrorType nvds_msgapi_send_async(NvDsMsgApiHandle h_ptr, char *topic, 
 
 void nvds_msgapi_do_work(NvDsMsgApiHandle h_ptr)
 {
-  nvds_log(NVDS_KAFKA_LOG_CAT, LOG_DEBUG, "nvds_msgapi_do_work\n");
+  nvds_log(NVDS_MQTT_LOG_CAT, LOG_DEBUG, "nvds_msgapi_do_work\n");
   nvds_kafka_client_poll(((NvDsKafkaProtoConn *) h_ptr)->kh);
 }
 
 NvDsMsgApiErrorType nvds_msgapi_disconnect(NvDsMsgApiHandle h_ptr)
 {
   if (!h_ptr) {
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_DEBUG, "nvds_msgapi_disconnect called with null handle\n");
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_DEBUG, "nvds_msgapi_disconnect called with null handle\n");
     return NVDS_MSGAPI_OK;
   }
 

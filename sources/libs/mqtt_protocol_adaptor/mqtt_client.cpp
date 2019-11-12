@@ -48,9 +48,9 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <glib.h>
-#include "rdkafka.h"
+#include "MQTTClient.h"
 #include "nvds_logger.h"
-#include "kafka_client.h"
+#include "mqtt_client.h"
 
 /**
  * @brief Message delivery report callback.
@@ -67,11 +67,11 @@ static void dr_msg_cb (rd_kafka_t *rk,
                        const rd_kafka_message_t *rkmessage, void *opaque) {
   NvDsMsgApiErrorType dserr;
   if (rkmessage->err) {
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "Message delivery failed: %s\n", \
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "Message delivery failed: %s\n", \
 	     rd_kafka_err2str(rkmessage->err));
   }
   else
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_DEBUG, "Message delivered (%zd bytes, " \
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_DEBUG, "Message delivered (%zd bytes, " \
                         "partition %d)\n", rkmessage->len, rkmessage->partition);
 
   switch (rkmessage->err) {
@@ -160,11 +160,11 @@ void *nvds_kafka_client_init(char *brokers, char *topic) {
    rd_kafka_conf_t *conf;  /* Temporary configuration object */
    char errstr[512];
 
-   nvds_log(NVDS_KAFKA_LOG_CAT, LOG_INFO, "Connecting to kafka broker: \
+   nvds_log(NVDS_MQTT_LOG_CAT, LOG_INFO, "Connecting to kafka broker: \
                             %s on topic %s\n", brokers, topic);
 
    if ((brokers == NULL) || (topic == NULL)) {
-     nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "Broker and/or topic is null. init failed\n");
+     nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "Broker and/or topic is null. init failed\n");
      return NULL;
    }
 
@@ -180,11 +180,11 @@ void *nvds_kafka_client_init(char *brokers, char *topic) {
           set of brokers from the cluster. */
    if (rd_kafka_conf_set(conf, "bootstrap.servers", brokers,
                               errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-     nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "Error connecting kafka broker: %s\n",errstr);
+     nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "Error connecting kafka broker: %s\n",errstr);
        return NULL;
     }
    //else
-   //    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_INFO, "Connection to broker succeeded\n");
+   //    nvds_log(NVDS_MQTT_LOG_CAT, LOG_INFO, "Connection to broker succeeded\n");
 
     /* Set the delivery report callback.
      * This callback will be called once per message to inform
@@ -225,7 +225,7 @@ NvDsMsgApiErrorType nvds_kafka_client_send(void *kv,  const uint8_t *payload, in
   }
 
   if (!kh) {
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "send called on NULL handle \n");
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "send called on NULL handle \n");
     return NVDS_MSGAPI_ERR;
   }
 
@@ -257,15 +257,15 @@ NvDsMsgApiErrorType nvds_kafka_client_send(void *kv,  const uint8_t *payload, in
             * The internal queue is limited by the
             * configuration property
             * queue.buffering.max.messages */
-           nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR,"rd_kafka_produce: Internal queue is full, discarding payload\n");
-	   nvds_log(NVDS_KAFKA_LOG_CAT, LOG_DEBUG, "rd_kafkaproduce: Discarding payload=%.*s \n topic = %s\n",len, payload, rd_kafka_topic_name(kh->topic));
+           nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR,"rd_kafka_produce: Internal queue is full, discarding payload\n");
+	   nvds_log(NVDS_MQTT_LOG_CAT, LOG_DEBUG, "rd_kafkaproduce: Discarding payload=%.*s \n topic = %s\n",len, payload, rd_kafka_topic_name(kh->topic));
        }
        else
        {
            /**
              * Failed to *enqueue* message for producing.
              */
-          nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR,"Failed to schedule kafka send: %s on topic <%s>\n", rd_kafka_err2str(rd_kafka_last_error()), rd_kafka_topic_name(kh->topic));			 
+          nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR,"Failed to schedule kafka send: %s on topic <%s>\n", rd_kafka_err2str(rd_kafka_last_error()), rd_kafka_topic_name(kh->topic));			 
        }
        return NVDS_MSGAPI_ERR;
 
@@ -294,10 +294,10 @@ NvDsMsgApiErrorType nvds_kafka_client_setconf(void *kv, char *key, char *val)
   
   if (rd_kafka_conf_set(kh->conf, key, val , errstr, sizeof(errstr)) \
            != RD_KAFKA_CONF_OK) {
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "Error setting config setting %s; %s\n", key, errstr );
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "Error setting config setting %s; %s\n", key, errstr );
     return NVDS_MSGAPI_ERR;
   } else {
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_INFO, "set config setting %s to %s\n", key, val);
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_INFO, "set config setting %s to %s\n", key, val);
     return NVDS_MSGAPI_OK;
   }
 }
@@ -320,7 +320,7 @@ NvDsMsgApiErrorType nvds_kafka_client_launch(void *kv)
     */
    rk = rd_kafka_new(RD_KAFKA_PRODUCER, kh->conf, errstr, sizeof(errstr));
    if (!rk) {
-      nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "Failed to create new producer: %s\n", errstr);
+      nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "Failed to create new producer: %s\n", errstr);
       return NVDS_MSGAPI_ERR;
    }
 
@@ -332,7 +332,7 @@ NvDsMsgApiErrorType nvds_kafka_client_launch(void *kv)
     */
    rkt = rd_kafka_topic_new(rk, kh->topic_name, NULL);
    if (!rkt) {
-        nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "Failed to create topic object: %s\n", \
+        nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "Failed to create topic object: %s\n", \
            rd_kafka_err2str(rd_kafka_last_error()));
         rd_kafka_destroy(rk);
         return NVDS_MSGAPI_ERR;
@@ -348,7 +348,7 @@ void nvds_kafka_client_finish(void *kv)
   NvDsKafkaClientHandle *kh = (NvDsKafkaClientHandle *)kv;
 
   if (!kh) {
-    nvds_log(NVDS_KAFKA_LOG_CAT, LOG_ERR, "finish called on NULL handle\n");
+    nvds_log(NVDS_MQTT_LOG_CAT, LOG_ERR, "finish called on NULL handle\n");
     return;
   }
     
